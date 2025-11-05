@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowImportingTsExtensions": true,
+    "allowArbitraryExtensions": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM"],
+    "baseUrl": "./src",
+    "resolveJsonModule": true,
+    "types": []
+  },
+  "include": [
+    "src/**/*.gbln",
+    "src/**/*.ts",
+    "tests/**/*.gbln",
+    "types/**/*.d.ts"
+  ],
+  "exclude": ["dist", "node_modules"]
+}

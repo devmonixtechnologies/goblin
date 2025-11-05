@@ -1,0 +1,27 @@
+{
+  "entries": {
+    "client": [
+      "src/index.gbln"
+    ],
+    "server": [
+      "src/server/index.gbln"
+    ]
+  },
+  "outDir": {
+    "client": "dist/client",
+    "server": "dist/server"
+  },
+  "splitting": true,
+  "minify": false,
+  "sourcemap": true,
+  "publicDir": "public",
+  "server": {
+    "host": "127.0.0.1",
+    "port": 5173,
+    "proxy": {}
+  },
+  "experiments": {
+    "suspense": true,
+    "streaming": true
+  }
+}

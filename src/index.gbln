@@ -1,0 +1,56 @@
+import type { VNode } from './runtime/vnode.gbln';
+import { h } from './runtime/vnode.gbln';
+import { Suspense, createResource } from './runtime/suspense.gbln';
+
+export interface AppProps {
+  title: string;
+  features?: Array<string>;
+}
+
+const featureResource = createResource(async () => {
+  await new Promise(resolve => setTimeout(resolve, 20));
+  return ['fast', 'typed', 'suspense-ready'];
+});
+
+export function App(props: AppProps): VNode {
+  const hasStaticFeatures = Array.isArray(props.features) && props.features.length > 0;
+  const staticItems = (props.features ?? []).map(label => h('li', { class: 'feature-item' }, label));
+
+  return h(
+    'main',
+    { class: 'goblin-app-shell' },
+    h('h1', null, props.title),
+    hasStaticFeatures
+      ? h('ul', { class: 'feature-list' }, staticItems)
+      : h(
+          Suspense,
+          {
+            fallback: () => h('p', { class: 'loading' }, 'Loading features...')
+          },
+          () =>
+            featureResource.preload(undefined).then(features => {
+              const items = features.map(label => h('li', { class: 'feature-item' }, label));
+              return items.length > 0
+                ? h('ul', { class: 'feature-list' }, items)
+                : h('p', null, 'Configure features in src/index.gbln to see them here.');
+            })
+        )
+  );
+}
+
+export interface RootRenderer {
+  render(target: HTMLElement, props: AppProps): VNode;
+}
+
+export function createRoot(): RootRenderer {
+  return {
+    render(target, props) {
+      const vnode = App(props);
+      target.dispatchEvent(new CustomEvent('goblin:render', { detail: { vnode } }));
+      target.textContent = JSON.stringify(vnode, null, 2);
+      return vnode;
+    }
+  };
+}
+
+export default App;

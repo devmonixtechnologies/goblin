@@ -1,0 +1,256 @@
+import { h } from './vnode.gbln';
+import type { VNode } from './vnode.gbln';
+import { useEffect, useState } from './hooks.gbln';
+import { getCurrentInstance, scheduleComponentUpdate } from './component.gbln';
+import { queueJob } from './scheduler.gbln';
+
+interface SuspenseState {
+  status: 'pending' | 'resolved' | 'rejected';
+  vnode: VNode | null;
+  error: unknown;
+}
+
+interface SuspenseProps {
+  fallback?: VNode | (() => VNode | null) | null;
+  children: VNode | (() => VNode | Promise<VNode | null> | null) | Promise<VNode | null> | null;
+}
+
+interface ResourceOptions<Key, Params> {
+  key?: (params: Params) => Key;
+}
+
+interface ResourceEntry<Value> {
+  status: 'pending' | 'resolved' | 'rejected';
+  value?: Value;
+  error?: unknown;
+  promise?: Promise<Value>;
+}
+
+interface Resource<Value, Params> {
+  read(params: Params): Value;
+  preload(params: Params): Promise<Value>;
+  subscribe(params: Params, listener: () => void): () => void;
+  invalidate(params: Params): void;
+  clear(): void;
+  keyFor(params: Params): unknown;
+}
+
+interface ResourceHookRecord {
+  key: unknown;
+  unsubscribe: (() => void) | null;
+  cleanup?: () => void;
+}
+
+function isPromise<T>(value: unknown): value is Promise<T> {
+  return Boolean(value) && typeof (value as Promise<T>).then === 'function';
+}
+
+async function resolveVNode(candidate: SuspenseProps['children']): Promise<VNode | null> {
+  if (candidate == null) {
+    return null;
+  }
+  if (typeof candidate === 'function') {
+    return resolveVNode(candidate());
+  }
+  if (isPromise<VNode | null>(candidate)) {
+    const resolved = await candidate;
+    return resolveVNode(resolved);
+  }
+  if (Array.isArray(candidate)) {
+    return h('goblin-fragment', null, ...(candidate as Array<VNode>));
+  }
+  return candidate as VNode;
+}
+
+function renderFallback(fallback: SuspenseProps['fallback']): VNode | null {
+  if (typeof fallback === 'function') {
+    return fallback() ?? null;
+  }
+  return fallback ?? null;
+}
+
+export function Suspense(props: SuspenseProps): VNode | null {
+  const [state, setState] = useState<SuspenseState>({ status: 'pending', vnode: null, error: null });
+
+  useEffect(() => {
+    let cancelled = false;
+    setState({ status: 'pending', vnode: null, error: null });
+    resolveVNode(props.children)
+      .then(vnode => {
+        if (!cancelled) {
+          setState({ status: 'resolved', vnode: vnode ?? null, error: null });
+        }
+      })
+      .catch(error => {
+        if (!cancelled) {
+          setState({ status: 'rejected', vnode: null, error });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [props.children]);
+
+  if (state.status === 'resolved') {
+    return state.vnode;
+  }
+
+  if (state.status === 'rejected') {
+    throw state.error ?? new Error('Suspense child rejected without an error reason.');
+  }
+
+  return renderFallback(props.fallback);
+}
+
+function defaultKeyResolver(params: unknown): unknown {
+  if (params == null) {
+    return '__default__';
+  }
+  if (typeof params === 'string' || typeof params === 'number' || typeof params === 'boolean') {
+    return params;
+  }
+  try {
+    return JSON.stringify(params);
+  } catch (_error) {
+    return params;
+  }
+}
+
+export function createResource<Value, Params = void>(
+  loader: (params: Params) => Promise<Value> | Value,
+  options: ResourceOptions<unknown, Params> = {}
+): Resource<Value, Params> {
+  const cache = new Map<unknown, ResourceEntry<Value>>();
+  const listeners = new Map<unknown, Set<() => void>>();
+  const key = options.key ?? defaultKeyResolver;
+
+  function notify(entryKey: unknown): void {
+    const set = listeners.get(entryKey);
+    if (!set) return;
+    for (const listener of set) {
+      listener();
+    }
+  }
+
+  function load(entryKey: unknown, params: Params): ResourceEntry<Value> {
+    const existing = cache.get(entryKey);
+    if (existing && existing.status === 'pending') {
+      return existing;
+    }
+    const record: ResourceEntry<Value> = { status: 'pending' };
+    const promise = Promise.resolve(loader(params));
+    record.promise = promise;
+    cache.set(entryKey, record);
+    promise
+      .then(value => {
+        record.status = 'resolved';
+        record.value = value;
+        notify(entryKey);
+      })
+      .catch(error => {
+        record.status = 'rejected';
+        record.error = error;
+        notify(entryKey);
+      });
+    return record;
+  }
+
+  function ensure(params: Params): { entryKey: unknown; record: ResourceEntry<Value> } {
+    const entryKey = key(params);
+    const record = cache.get(entryKey) ?? load(entryKey, params);
+    return { entryKey, record };
+  }
+
+  return {
+    read(params: Params): Value {
+      const { record } = ensure(params);
+      if (record.status === 'resolved') {
+        return record.value as Value;
+      }
+      if (record.status === 'rejected') {
+        throw record.error;
+      }
+      throw record.promise;
+    },
+    preload(params: Params): Promise<Value> {
+      const { record } = ensure(params);
+      if (record.status === 'resolved') {
+        return Promise.resolve(record.value as Value);
+      }
+      if (record.status === 'rejected') {
+        return Promise.reject(record.error);
+      }
+      return record.promise as Promise<Value>;
+    },
+    subscribe(params: Params, listener: () => void): () => void {
+      const { entryKey } = ensure(params);
+      let set = listeners.get(entryKey);
+      if (!set) {
+        set = new Set();
+        listeners.set(entryKey, set);
+      }
+      set.add(listener);
+      return () => {
+        const target = listeners.get(entryKey);
+        if (!target) return;
+        target.delete(listener);
+        if (target.size === 0) {
+          listeners.delete(entryKey);
+        }
+      };
+    },
+    invalidate(params: Params): void {
+      const entryKey = key(params);
+      cache.delete(entryKey);
+      notify(entryKey);
+    },
+    clear(): void {
+      cache.clear();
+      listeners.clear();
+    },
+    keyFor(params: Params): unknown {
+      return key(params);
+    }
+  };
+}
+
+export function useResource<Value, Params = void>(resource: Resource<Value, Params>, params: Params): Value {
+  const instance = getCurrentInstance();
+  if (!instance) {
+    throw new Error('useResource must be called within a Goblin function component.');
+  }
+  const index = instance.hookIndex++;
+  let record = instance.hooks[index] as ResourceHookRecord | undefined;
+  const resourceKey = resource.keyFor(params);
+
+  if (!record || record.key !== resourceKey) {
+    if (record?.unsubscribe) {
+      record.unsubscribe();
+    }
+    const unsubscribe = resource.subscribe(params, () => {
+      queueJob(() => {
+        const trigger = scheduleComponentUpdate(instance, () => {});
+        trigger();
+      }, 'immediate');
+    });
+    record = {
+      key: resourceKey,
+      unsubscribe,
+      cleanup: () => {
+        unsubscribe();
+      }
+    };
+    instance.hooks[index] = record;
+  }
+
+  try {
+    return resource.read(params);
+  } catch (value) {
+    if (isPromise<Value>(value)) {
+      resource.preload(params).catch(() => {
+        /* noop: handled via subsequent read */
+      });
+    }
+    throw value;
+  }
+}

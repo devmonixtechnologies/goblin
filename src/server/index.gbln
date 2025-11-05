@@ -1,0 +1,56 @@
+import http from 'node:http';
+import type { AppProps } from '../index.gbln';
+import { App } from '../index.gbln';
+import { renderVNodeToStream } from './streaming.gbln';
+
+export interface ServerOptions {
+  host?: string;
+  port?: number;
+  streaming?: boolean;
+}
+
+export async function renderToStream(props: AppProps) {
+  const vnode = App(props);
+  return renderVNodeToStream(vnode);
+}
+
+export function createServer(options: ServerOptions = {}) {
+  const host = options.host ?? '127.0.0.1';
+  const port = options.port ?? 3000;
+  const streaming = Boolean(options.streaming);
+
+  const server = http.createServer(async (_req, res) => {
+    const props: AppProps = { title: 'Goblin Server', features: ['ssr', 'typed', 'fast'] };
+    if (streaming) {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Transfer-Encoding', 'chunked');
+      try {
+        for await (const chunk of await renderToStream(props)) {
+          res.write(chunk);
+        }
+        res.end();
+      } catch (error) {
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: (error as Error).message }));
+      }
+      return;
+    }
+    const vnode = App(props);
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify(vnode));
+  });
+
+  return {
+    listen(cb?: () => void) {
+      server.listen(port, host, cb);
+    },
+    close(cb?: (err?: Error) => void) {
+      server.close(cb);
+    }
+  };
+}
+
+export async function renderToString(props: AppProps): Promise<string> {
+  const vnode = App(props);
+  return JSON.stringify(vnode, null, 2);
+}

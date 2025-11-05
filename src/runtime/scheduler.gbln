@@ -1,0 +1,82 @@
+interface ScheduledJob {
+  job: () => void;
+  id: number;
+}
+
+type Priority = 'immediate' | 'normal' | 'idle';
+
+const queues: Record<Priority, Array<ScheduledJob>> = {
+  immediate: [],
+  normal: [],
+  idle: []
+};
+
+let isFlushing = false;
+let jobCounter = 0;
+const pendingPostFlushCbs: Array<() => void> = [];
+
+const nextTick = typeof queueMicrotask === 'function' ? queueMicrotask : (cb => Promise.resolve().then(cb));
+
+function scheduleFlush(): void {
+  if (isFlushing) return;
+  isFlushing = true;
+  nextTick(runQueues);
+}
+
+function runQueues(): void {
+  try {
+    flushQueue('immediate');
+    flushQueue('normal');
+    if (!queues.immediate.length && !queues.normal.length) {
+      flushQueue('idle');
+    }
+    flushPostFlushCbs();
+  } finally {
+    isFlushing = false;
+    if (hasPendingJobs()) {
+      scheduleFlush();
+    }
+  }
+}
+
+function flushQueue(priority: Priority): void {
+  const list = queues[priority];
+  let entry: ScheduledJob | undefined;
+  while ((entry = list.shift())) {
+    entry.job();
+  }
+}
+
+function flushPostFlushCbs(): void {
+  if (!pendingPostFlushCbs.length) return;
+  const cbs = [...new Set(pendingPostFlushCbs)];
+  pendingPostFlushCbs.length = 0;
+  for (const cb of cbs) {
+    cb();
+  }
+}
+
+function hasPendingJobs(): boolean {
+  return queues.immediate.length > 0 || queues.normal.length > 0 || queues.idle.length > 0;
+}
+
+export function queueJob(job: () => void, priority: Priority = 'normal'): void {
+  const list = queues[priority];
+  if (!list.some(entry => entry.job === job)) {
+    list.push({ job, id: jobCounter++ });
+    scheduleFlush();
+  }
+}
+
+export function withScheduler<T extends (...args: unknown[]) => unknown>(fn: T, priority: Priority = 'normal'): (...funcArgs: Parameters<T>) => void {
+  return (...args: Parameters<T>) => queueJob(() => fn(...args), priority);
+}
+
+export function queuePostFlushCb(cb: () => void): void {
+  pendingPostFlushCbs.push(cb);
+  scheduleFlush();
+}
+
+export function flushIdle(): void {
+  flushQueue('idle');
+}

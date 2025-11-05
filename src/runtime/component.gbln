@@ -1,0 +1,95 @@
+import type { VNode } from './vnode.gbln';
+import { queueJob } from './scheduler.gbln';
+
+export interface AppContext {
+  provides: Record<string, unknown>;
+}
+
+export interface ComponentInstance<Props = Record<string, unknown>> {
+  uid: number;
+  vnode: VNode<Props>;
+  parent: ComponentInstance | null;
+  appContext: AppContext;
+  type: VNode<Props>['type'];
+  root: ComponentInstance | null;
+  next: VNode<Props> | null;
+  subTree: VNode | null;
+  update: (() => void) | null;
+  isMounted: boolean;
+  props: Props;
+  hooks: Array<unknown>;
+  hookIndex: number;
+  effects: Array<() => void>;
+  provides: Record<string, unknown>;
+  render: (props: Props) => VNode;
+  hostContainer: ParentNode | null;
+}
+
+let currentInstance: ComponentInstance | null = null;
+let instanceUid = 0;
+
+export function createComponentInstance<Props>(vnode: VNode<Props>, parent: ComponentInstance | null): ComponentInstance<Props> {
+  const appContext: AppContext = vnode.appContext || (parent && parent.appContext) || { provides: Object.create(null) };
+
+  const instance: ComponentInstance<Props> = {
+    uid: instanceUid++,
+    vnode,
+    parent: parent || null,
+    appContext,
+    type: vnode.type,
+    root: parent ? parent.root : null,
+    next: null,
+    subTree: null,
+    update: null,
+    isMounted: false,
+    props: (vnode.props || {}) as Props,
+    hooks: [],
+    hookIndex: 0,
+    effects: [],
+    provides: parent ? Object.create(parent.provides) : Object.create(appContext.provides || null),
+    render: () => vnode,
+    hostContainer: null
+  };
+
+  if (!instance.root) {
+    instance.root = instance;
+  }
+
+  vnode.component = instance as unknown as ComponentInstance<unknown>;
+
+  return instance;
+}
+
+export function setupComponent(instance: ComponentInstance): void {
+  const Component = instance.type;
+  if (typeof Component !== 'function') {
+    throw new Error('Goblin only supports function components at this time.');
+  }
+  instance.render = Component as (props: unknown) => VNode;
+}
+
+export function prepareInstanceForRender(instance: ComponentInstance): void {
+  instance.hookIndex = 0;
+  instance.effects = [];
+}
+
+export function setCurrentInstance(instance: ComponentInstance | null): void {
+  currentInstance = instance;
+}
+
+export function resetCurrentInstance(): void {
+  currentInstance = null;
+}
+
+export function getCurrentInstance(): ComponentInstance | null {
+  return currentInstance;
+}
+
+export function updateComponentProps<Props>(instance: ComponentInstance<Props>, nextVNode: VNode<Props>): void {
+  instance.props = (nextVNode.props || {}) as Props;
+}
+
+export function scheduleComponentUpdate(instance: ComponentInstance, updateFn: () => void): () => void {
+  instance.update = () => queueJob(updateFn);
+  return instance.update;
+}

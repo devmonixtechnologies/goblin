@@ -1,0 +1,108 @@
+import { getCurrentInstance, scheduleComponentUpdate } from './component.gbln';
+
+function assertInstance() {
+  const instance = getCurrentInstance();
+  if (!instance) {
+    throw new Error('Hooks can only be used inside Goblin function components.');
+  }
+  return instance;
+}
+
+export function useState(initialValue) {
+  const instance = assertInstance();
+  const index = instance.hookIndex++;
+  if (!(index in instance.hooks)) {
+    const value = typeof initialValue === 'function' ? initialValue() : initialValue;
+    instance.hooks[index] = value;
+  }
+  const setState = nextValue => {
+    const current = instance.hooks[index];
+    const value = typeof nextValue === 'function' ? nextValue(current) : nextValue;
+    if (!Object.is(value, current)) {
+      instance.hooks[index] = value;
+      if (instance.update) {
+        instance.update();
+      } else {
+        scheduleComponentUpdate(instance, () => {});
+      }
+    }
+  };
+  return [instance.hooks[index], setState];
+}
+
+export function useReducer(reducer, initialArg, init) {
+  const instance = assertInstance();
+  const index = instance.hookIndex++;
+  if (!(index in instance.hooks)) {
+    instance.hooks[index] = init ? init(initialArg) : initialArg;
+  }
+  const dispatch = action => {
+    const value = instance.hooks[index];
+    const nextValue = reducer(value, action);
+    if (!Object.is(value, nextValue)) {
+      instance.hooks[index] = nextValue;
+      instance.update && instance.update();
+    }
+  };
+  return [instance.hooks[index], dispatch];
+}
+
+export function useRef(initialValue) {
+  const instance = assertInstance();
+  const index = instance.hookIndex++;
+  if (!(index in instance.hooks)) {
+    instance.hooks[index] = { current: initialValue };
+  }
+  return instance.hooks[index];
+}
+
+export function useMemo(factory, deps) {
+  const instance = assertInstance();
+  const index = instance.hookIndex++;
+  const hasDeps = Array.isArray(deps);
+  const record = instance.hooks[index];
+  if (!record) {
+    const value = factory();
+    instance.hooks[index] = { value, deps };
+    return value;
+  }
+  if (!hasDeps) {
+    const value = factory();
+    instance.hooks[index] = { value, deps };
+    return value;
+  }
+  const prevDeps = record.deps || [];
+  const changed = deps.length !== prevDeps.length || deps.some((dep, i) => !Object.is(dep, prevDeps[i]));
+  if (changed) {
+    const value = factory();
+    instance.hooks[index] = { value, deps };
+    return value;
+  }
+  return record.value;
+}
+
+export function useEffect(effect, deps) {
+  const instance = assertInstance();
+  const index = instance.hookIndex++;
+  const record = instance.hooks[index] || { deps: undefined, cleanup: undefined };
+  const hasDeps = Array.isArray(deps);
+  const prevDeps = record.deps;
+  const changed = !hasDeps || !prevDeps || deps.length !== prevDeps.length || deps.some((dep, i) => !Object.is(dep, prevDeps[i]));
+
+  if (changed) {
+    instance.effects.push(() => {
+      if (typeof record.cleanup === 'function') {
+        record.cleanup();
+      }
+      const cleanup = effect();
+      instance.hooks[index] = {
+        deps,
+        cleanup: typeof cleanup === 'function' ? cleanup : undefined
+      };
+    });
+  } else {
+    instance.effects.push(() => {
+      instance.hooks[index] = record;
+    });
+  }
+}

@@ -1,0 +1,19 @@
+import React from 'react';
+
+export default function App(props) {
+  const features = props.features ?? [];
+  return React.createElement(
+    'main',
+    { className: 'goblin-react-shell' },
+    React.createElement('h1', null, props.title ?? 'Goblin React Template'),
+    features.length > 0
+      ? React.createElement(
+          'ul',
+          { className: 'feature-list' },
+          features.map((feature, index) =>
+            React.createElement('li', { key: index }, feature)
+          )
+        )
+      : React.createElement('p', null, 'Add features to see them listed here.')
+  );
+}

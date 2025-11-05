@@ -1,0 +1,12 @@
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import App from '../app.gbln';
+
+document.addEventListener('DOMContentLoaded', () => {
+  const rootEl = document.getElementById('root');
+  if (!rootEl) {
+    throw new Error('Unable to find #root element to mount Goblin React app');
+  }
+  const root = createRoot(rootEl);
+  root.render(React.createElement(App, { title: 'Goblin React Template', features: ['react', 'goblin', 'full-stack'] }));
+});

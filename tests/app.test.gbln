@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict';
+import { App } from '../src/index.gbln';
+import { Suspense } from '../src/runtime/suspense.gbln';
+import { h, TEXT_TYPE } from '../src/runtime/vnode.gbln';
+import { renderToStream } from '../src/server/index.gbln';
+import { collectStream } from '../src/server/streaming.gbln';
+
+export const tests = [
+  {
+    name: 'App renders title text node',
+    run() {
+      const vnode = App({ title: 'Goblin', features: ['fast', 'typed'] });
+      assert.equal(vnode.type, 'main');
+      const heading = vnode.children.find(child => child.type === 'h1');
+      assert.ok(heading, 'expected to find heading child');
+      const headingText = heading.children[0];
+      assert.equal(headingText.type, TEXT_TYPE);
+      assert.equal(headingText.children, 'Goblin');
+    }
+  },
+  {
+    name: 'App renders features list',
+    run() {
+      const vnode = App({ title: 'Goblin', features: ['fast', 'typed'] });
+      const list = vnode.children.find(child => child.type === 'ul');
+      assert.ok(list, 'expected feature list');
+      assert.equal(Array.isArray(list.children), true);
+      assert.equal(list.children.length, 2);
+    }
+  },
+  {
+    name: 'Suspense fallback appears when no static features provided',
+    async run() {
+      const vnode = App({ title: 'Goblin' });
+      const suspense = vnode.children.find(child => child.type === Suspense);
+      assert.ok(suspense, 'expected Suspense child');
+      const fallbackCandidate = typeof suspense.props?.fallback === 'function'
+        ? suspense.props.fallback()
+        : suspense.props?.fallback;
+      assert.ok(fallbackCandidate, 'expected fallback vnode');
+      const paragraph = Array.isArray(fallbackCandidate)
+        ? fallbackCandidate.find(child => child.type === 'p')
+        : fallbackCandidate;
+      assert.ok(paragraph, 'expected fallback paragraph vnode');
+      assert.equal(paragraph.type, 'p');
+      const textChild = Array.isArray(paragraph.children) ? paragraph.children[0] : paragraph.children;
+      assert.equal(textChild.children, 'Loading features...');
+    }
+  },
+  {
+    name: 'renderToStream produces chunked payload',
+    async run() {
+      const props = { title: 'Goblin', features: ['fast', 'typed'] };
+      const stream = await renderToStream(props);
+      const payload = await collectStream(stream);
+      const parsed = JSON.parse(payload);
+      assert.equal(parsed.type, 'main');
+      assert.equal(parsed.children.length > 0, true);
+    }
+  }
+];

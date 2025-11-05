@@ -1,0 +1,11 @@
+{
+  "entries": {
+    "client": ["src/main.gbln"],
+    "server": ["src/server/index.gbln"]
+  },
+  "publicDir": "public",
+  "server": {
+    "host": "0.0.0.0",
+    "port": 4173
+  }
+}

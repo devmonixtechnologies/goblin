@@ -1,0 +1,34 @@
+import type { VNode } from '../runtime/vnode.gbln';
+
+const DEFAULT_CHUNK_SIZE = 1024;
+
+export interface StreamOptions {
+  chunkSize?: number;
+  signal?: AbortSignal;
+}
+
+export async function* renderVNodeToStream(
+  vnode: VNode,
+  options: StreamOptions = {}
+): AsyncGenerator<string, void, unknown> {
+  const chunkSize = Math.max(16, options.chunkSize ?? DEFAULT_CHUNK_SIZE);
+  const serialized = JSON.stringify(vnode);
+  for (let index = 0; index < serialized.length; index += chunkSize) {
+    if (options.signal?.aborted) {
+      break;
+    }
+    const chunk = serialized.slice(index, index + chunkSize);
+    yield chunk;
+    if (chunkSize > 64) {
+      await Promise.resolve();
+    }
+  }
+}
+
+export async function collectStream(iterable: AsyncIterable<string>): Promise<string> {
+  let result = '';
+  for await (const chunk of iterable) {
+    result += chunk;
+  }
+  return result;
+}

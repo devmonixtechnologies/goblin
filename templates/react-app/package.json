@@ -1,0 +1,14 @@
+{
+  "name": "goblin-react-app",
+  "private": true,
+  "scripts": {
+    "dev": "goblin dev",
+    "build": "goblin build",
+    "preview": "goblin preview",
+    "start": "node dist/server/index.js"
+  },
+  "dependencies": {
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
+  }
+}

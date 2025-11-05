@@ -1,0 +1,18 @@
+import express from 'express';
+import { renderToPipeableStream } from 'react-dom/server';
+import React from 'react';
+import App from '../app.gbln';
+
+export function createServer() {
+  const app = express();
+
+  app.get('*', (_req, res) => {
+    res.setHeader('Content-Type', 'text/html');
+    const stream = renderToPipeableStream(
+      React.createElement(App, { title: 'Goblin React SSR', features: ['universal', 'fast', 'typed'] })
+    );
+    stream.pipe(res);
+  });
+
+  return app;
+}

@@ -1,0 +1,76 @@
+export const TEXT_TYPE = Symbol('GoblinText');
+
+export type PrimitiveChild = string | number | boolean | null | undefined;
+export type ComponentType<Props = Record<string, unknown>> = (props?: Props) => VNode | PrimitiveChild | Array<VNode | PrimitiveChild>;
+export type VNodeType<Props = Record<string, unknown>> = string | ComponentType<Props> | typeof TEXT_TYPE;
+
+export interface VNode<Props = Record<string, unknown>> {
+  type: VNodeType<Props>;
+  props: Props & { children?: VNodeChildren };
+  key: string | number | null;
+  el: Node | null;
+  children: NormalizedChildren;
+  shapeFlag: number;
+  appContext?: Record<string, unknown>;
+  component?: unknown;
+}
+
+export type VNodeChild = VNode | PrimitiveChild;
+export type VNodeChildren = VNodeChild | Array<VNodeChild>;
+export type NormalizedChildren = Array<VNode | TextVNode>;
+
+export interface TextVNode extends VNode {
+  type: typeof TEXT_TYPE;
+  children: string;
+}
+
+function normalizeChildren(children: Array<VNodeChild | Array<VNodeChild>>): NormalizedChildren {
+  const flat: NormalizedChildren = [];
+  for (const child of children) {
+    if (Array.isArray(child)) {
+      flat.push(...normalizeChildren(child as Array<VNodeChild | Array<VNodeChild>>));
+    } else if (child == null || child === false || child === true) {
+      continue;
+    } else if (typeof child === 'object') {
+      flat.push(child as VNode);
+    } else {
+      flat.push(createTextVNode(String(child)));
+    }
+  }
+  return flat;
+}
+
+export function h<Props = Record<string, unknown>>(type: VNodeType<Props>, props: Props | null = null, ...children: Array<VNodeChild | Array<VNodeChild>>): VNode<Props> {
+  const normalizedChildren = normalizeChildren(children);
+  const key = props && (props as Record<string, unknown>).key != null ? (props as Record<string, unknown>).key : null;
+  const nextProps = props ? { ...(props as Record<string, unknown>) } : {};
+  if (key != null) {
+    delete (nextProps as Record<string, unknown>).key;
+  }
+  if (normalizedChildren.length > 0) {
+    (nextProps as Record<string, unknown>).children = normalizedChildren.length === 1 ? normalizedChildren[0] : normalizedChildren;
+  }
+  return {
+    type,
+    props: nextProps as Props & { children?: VNodeChildren },
+    key: key as string | number | null,
+    el: null,
+    children: normalizedChildren,
+    shapeFlag: typeof type === 'string' ? 1 : typeof type === 'function' ? 2 : 0
+  } as VNode<Props>;
+}
+
+export function createTextVNode(text: string): TextVNode {
+  return {
+    type: TEXT_TYPE,
+    props: {} as Record<string, unknown> & { children?: VNodeChildren },
+    key: null,
+    el: null,
+    children: text,
+    shapeFlag: 0
+  } as TextVNode;
+}
+
+export function isTextVNode(vnode: VNode | null | undefined): vnode is TextVNode {
+  return Boolean(vnode && vnode.type === TEXT_TYPE);
+}
