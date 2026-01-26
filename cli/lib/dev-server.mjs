@@ -153,7 +153,7 @@ function handleEventStream(emitter, res) {
   res.on('close', () => emitter.off('message', handler));
 }
 
-function resolveAsset(requestUrl, publicDir, clientOutDir) {
+export function resolveAsset(requestUrl, publicDir, clientOutDir) {
   if (!requestUrl) {
     return join(clientOutDir, 'index.html');
   }
@@ -161,16 +161,22 @@ function resolveAsset(requestUrl, publicDir, clientOutDir) {
     const relative = requestUrl.slice(2);
     return join(clientOutDir, relative);
   }
-  const cleanUrl = requestUrl === '/' ? '/index.html' : requestUrl;
-  let candidate = null;
+  const cleanUrl = sanitizeRequestPath(requestUrl);
   if (publicDir) {
-    candidate = join(publicDir, cleanUrl);
-    if (existsSync(candidate)) {
-      return candidate;
+    const publicCandidate = join(publicDir, cleanUrl);
+    if (existsSync(publicCandidate)) {
+      return publicCandidate;
     }
   }
-  candidate = join(clientOutDir, cleanUrl);
-  return candidate;
+  return join(clientOutDir, cleanUrl);
+}
+
+function sanitizeRequestPath(requestUrl) {
+  const [pathOnly] = requestUrl.split(/[?#]/);
+  if (!pathOnly || pathOnly === '/') {
+    return 'index.html';
+  }
+  return pathOnly.startsWith('/') ? pathOnly.slice(1) : pathOnly;
 }
 
 function streamFile(filePath, res) {

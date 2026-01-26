@@ -133,4 +133,38 @@ program
     })
   );
 
+program
+  .command('templates')
+  .description('List available Goblin starter templates')
+  .option('--json', 'Emit template metadata as JSON', false)
+  .action(
+    wrapAction(async options => {
+      if (options.json) {
+        const { listTemplates } = await import('./lib/scaffold.mjs');
+        const templates = await listTemplates();
+        console.log(JSON.stringify(templates, null, 2));
+        return;
+      }
+      const { printTemplateList } = await import('./lib/scaffold.mjs');
+      await printTemplateList();
+    })
+  );
+
+program
+  .command('create')
+  .description('Scaffold a new project from a Goblin template')
+  .argument('<template>', 'Template name to scaffold')
+  .argument('[directory]', 'Destination directory (defaults to template name)')
+  .option('--list', 'List templates before scaffolding', false)
+  .action(
+    wrapAction(async (template, directory, options) => {
+      if (options.list) {
+        const { printTemplateList } = await import('./lib/scaffold.mjs');
+        await printTemplateList();
+      }
+      const { scaffoldProject } = await import('./lib/scaffold.mjs');
+      await scaffoldProject(template, directory);
+    })
+  );
+
 program.parseAsync(process.argv);
