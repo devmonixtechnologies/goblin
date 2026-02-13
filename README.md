@@ -78,7 +78,7 @@ npm test
 - **Server Bridge:** `src/server/index.gbln` exposes `createServer()` and `renderToString()` so the same component tree powers edge JSON APIs, SSR, or static pre-rendering with minimal wiring.
 - **Toolchain Integration:** `cli/lib/compiler.mjs` pipelines esbuild, public asset copying, and TypeScript diagnostics so projects stay production-ready without extra setup.
 - **Stream-first Server:** `src/server/streaming.gbln` exposes async generators for chunked payloads, while `src/server/index.gbln` serves JSON or streaming responses with a flip of a flag.
-- **Diagnostics Core:** `cli/lib/diagnostics.mjs` surfaces precise TypeScript errors, letting you ship confident changes without leaving the Goblin workflow.
+- **Diagnostics Core:** `cli/lib/diagnostics.mjs` surfaces precise TypeScript errors, letting you ship confident changes without leaving the Goblin workflows.
 
 ### Advanced Capabilities & Ergonomics
 
