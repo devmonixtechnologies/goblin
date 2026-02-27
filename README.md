@@ -31,7 +31,7 @@ Goblin blends a cutting-edge virtual DOM runtime with an incredibly streamlined 
 - **First-class CLI** (`cli/goblin.mjs`) for `compile`, `dev`, `build`, `preview`, `test`, `lint`, and `bench` workflows, wrapping complex flows in simple commands.
 - **Hot module reload (HMR)** event source injected during development builds for instant feedback without manual refreshes.
 - **Configurable bundling** with code splitting, source maps, and public asset copying baked into the compiler so production builds stay lean.
-- **Testing harness** that executes `.test.gbln` suites with Node’s `assert/strict` utilities, making correctness straightforward.
+- **Testing harness** that executes `.test.gbln` suites with Node’s `assert/strict` utilities, making correctness straightforwards.
 
 ## Quick Start
 
